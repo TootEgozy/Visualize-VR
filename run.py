@@ -1,6 +1,7 @@
 from tkinter import filedialog
 from datetime import datetime
 import pyxdf
+import re
 import matplotlib
 matplotlib.use('TkAgg')
 import matplotlib.pyplot as plt
@@ -14,6 +15,40 @@ timestamp_excel = now.strftime("260825-%H%M")
 timestamp_plot = now.strftime("260825-%H%M")
 excel_filename = f"data-{timestamp_excel}.xlsx"
 plot_filename = f"graph-{timestamp_plot}.png"
+
+# ----------------- Helper functions to restructure and clean data ---------------
+
+def clean_event_name(event_name):
+    s = event_name.lower()
+    s = re.sub(r'\b(start|stop)\b', '', s)
+    s = re.sub(r'for\s+\d+(\.\d+)?\s+seconds', '', s)
+    s = ' '.join(s.split())
+    return s
+
+
+def build_event_dict(stream):
+    events = stream['time_series']
+    timestamps = stream['time_stamps']
+    event_dict = {}
+    for event, ts in zip(events, timestamps):
+        event_name = clean_event_name(event[0])
+
+        if event_name not in event_dict:
+            event_dict[event_name] = {"start": ts, "stop": None}
+        else:
+            event_dict[event_name]["stop"] = ts
+    return event_dict
+
+
+def build_pupil_dict(stream, pupil_stream):
+    timestamps = stream['time_stamps']
+    pupil_dict = {}
+
+    for time_stamp, pupil_size in zip(timestamps, pupil_stream):
+        pupil_dict[time_stamp] = pupil_size
+
+    return pupil_dict
+
 
 
 def select_valid_pupil(pupil_data):
@@ -33,29 +68,11 @@ def select_valid_pupil(pupil_data):
         return pupil
 
 
-def average_before_event(pupil_time, pupil_data, event_time, samples=3, interval_ms=1, offset_ms=3):
-    interval = interval_ms / 1000
-    offset = offset_ms / 1000
-    sample_times = [event_time - offset - i * interval for i in range(samples)]
-    values = []
-    for t in sample_times:
-        idx = np.searchsorted(pupil_time, t)
-        if 0 <= idx < len(pupil_data):
-            val = pupil_data[idx]
-            if val >= 0:
-                values.append(val)
-    return np.mean(values) if values else float('nan')
+def get_pupil_size_by_timestamp(pupil_dict, target_ts):
+    closest_ts = min(pupil_dict.keys(), key=lambda ts: abs(ts - target_ts))
+    return pupil_dict[closest_ts]
 
-
-def average_min_after_event(pupil_time, pupil_data, start_time, end_time, min_samples=3):
-    mask = (pupil_time >= start_time) & (pupil_time <= end_time)
-    data = pupil_data[mask]
-    data = data[data >= 0]
-    if len(data) == 0:
-        return float('nan')
-    n = min(min_samples, len(data))
-    min_vals = np.partition(data, n - 1)[:n]
-    return np.mean(min_vals)
+# --------------------------------------------------------------------------------
 
 
 # Load XDF
@@ -115,30 +132,20 @@ while i < len(marker_labels) - 1:
     else:
         i += 1  # Skip unmatched or malformed events
 
-# --- Compute Data for Excel ---
-event_labels_with_times = []
-pupil_before_events = []
-min_pupil_after_events = []
+# --------------------------------- Compute Data for Excel -----------------------------------
 
-for i, event in enumerate(event_infos):
-    label = event["label"]
-    start = event["start"]
-    end = event["end"]
+event_dict = build_event_dict(marker_streams[0])
+pupil_dict = build_pupil_dict(pupil_streams[0], chosen_pupil)
 
-    event_labels_with_times.append(f"{label}\nStart: {start:.3f}s\nEnd: {end:.3f}s")
 
-    avg_before = average_before_event(pupil_time, chosen_pupil, start)
-    pupil_before_events.append(avg_before)
+event_key = list(event_dict.keys())[0]
+event_start = event_dict[event_key]["start"]
+pupil_size_at_event = get_pupil_size_by_timestamp(pupil_dict, event_start)
 
-    next_start = event_infos[i + 1]["start"] if i + 1 < len(event_infos) else pupil_time[-1]
-    avg_min_after = average_min_after_event(pupil_time, chosen_pupil, end, next_start)
-    min_pupil_after_events.append(avg_min_after)
-
-# --- Excel Output ---
 excel_data = pd.DataFrame({
-    "Event Label + Start/End": event_labels_with_times,
-    "Avg Pupil Size Before Event": pupil_before_events,
-    "Avg 3 Min Pupil Sizes After Event": min_pupil_after_events
+    "Event Label + Start/End": 1,
+    "Avg Pupil Size Before Event": 2,
+    "Avg 3 Min Pupil Sizes After Event": 3
 })
 
 extremes_data = pd.DataFrame({
