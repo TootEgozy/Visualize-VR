@@ -7,10 +7,10 @@ matplotlib.use('TkAgg')
 import matplotlib.pyplot as plt
 import numpy as np
 import mplcursors
-import pandas as pd
 import os
 from openpyxl import Workbook
 
+digits_fixed = 8 # how many digits to include in the floats
 now = datetime.now()
 timestamp_excel = now.strftime("260825-%H%M")
 timestamp_plot = now.strftime("260825-%H%M")
@@ -18,8 +18,6 @@ excel_filename = f"data-{timestamp_excel}.xlsx"
 plot_filename = f"graph-{timestamp_plot}.png"
 
 # ----------------- Helper functions to restructure and clean data ---------------
-
-digits_fixed = 8 # how many digits to include in the floats
 
 def clean_event_name(event_name):
     s = event_name.lower()
@@ -231,8 +229,8 @@ for event in event_dict:
     size_after = get_average_size_after_event(pupil_timestamps, pupil_dict, event_end, next_start)
     event_dict[event]["average_size_after"] = size_after
 
-
-results_dir = os.path.join(os.getcwd(), "results")
+# Create excel
+results_dir = os.path.join(os.getcwd(), "VR Processing Results")
 os.makedirs(results_dir, exist_ok=True)
 output_path = os.path.join(results_dir, excel_filename)
 
@@ -272,7 +270,7 @@ wb.save(output_path)
 
 print(f"Excel file saved to: {output_path}")
 
-# --- Plot ---
+# ------------------------------------ Plot ----------------------------------------
 plt.figure(figsize=(16, 6))
 pupil_line, = plt.plot(pupil_time, chosen_pupil, label="Chosen Pupil", color='navy')
 
