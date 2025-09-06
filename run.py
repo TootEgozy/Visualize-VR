@@ -9,6 +9,7 @@ import numpy as np
 import mplcursors
 import pandas as pd
 import os
+from openpyxl import Workbook
 
 now = datetime.now()
 timestamp_excel = now.strftime("260825-%H%M")
@@ -25,6 +26,7 @@ def clean_event_name(event_name):
     s = re.sub(r'\b(start|stop)\b', '', s)
     s = re.sub(r'for\s+\d+(\.\d+)?\s+seconds', '', s)
     s = ' '.join(s.split())
+    s = s.rstrip('.')
     return s
 
 def get_vector_from_name(event_name):
@@ -33,6 +35,12 @@ def get_vector_from_name(event_name):
         return f"({match.group(1).strip()})"
     return None
 
+def get_luminescence_from_name(event_name):
+    return event_name.split(" in (")[0].strip()
+
+def calc_event_duration(start_ts, stop_ts):
+    duration = stop_ts - start_ts
+    return f"{duration:.2f}"
 
 def build_event_dict(stream):
     events = stream['time_series']
@@ -44,16 +52,22 @@ def build_event_dict(stream):
         ts = timestamps[i]
         event_name = clean_event_name(event[0])
         event_vector = get_vector_from_name(event_name)
+        event_luminescence = get_luminescence_from_name(event_name)
         last_event_ts = timestamps[-1]
         fixed_digits_ts = round(ts, digits_fixed)
         fixed_digits_next_event_ts = round(timestamps[i + 1] if i + 1 < len(timestamps) else last_event_ts, digits_fixed)
 
         if event_name not in event_dict:
-            event_dict[event_name] = {"start": fixed_digits_ts, "stop": last_event_ts}
-            event_dict[event_name]["vector"] = event_vector
+            event_dict[event_name] = {
+                "start": fixed_digits_ts,
+                "stop": last_event_ts,
+                "vector": event_vector,
+                "luminescence": event_luminescence
+            }
         else:
             event_dict[event_name]["stop"] = fixed_digits_ts
             event_dict[event_name]["next_event_start"] = fixed_digits_next_event_ts
+            event_dict[event_name]["duration"] = calc_event_duration(event_dict[event_name].get("start"), fixed_digits_ts)
 
     return event_dict
 
@@ -106,7 +120,7 @@ def get_timestamps_before_event(timestamps_list, pupil_map, event_ts, count=3, s
 
         pupil_size = pupil_map.get(ts)
 
-        if pupil_size > 0: # valid sample, not a blink
+        if pupil_size > 2.5: # valid sample, not a blink
             samples.append(pupil_size)
             items_left -= 1
         else: # a blink
@@ -132,7 +146,7 @@ def get_average_size_after_event(pupil_dict_keys, pupil_dict, event_start, event
 
     for ts in searching_range:
         pupil_size = pupil_dict.get(ts)
-        if max(samples) > pupil_size > 0:
+        if max(samples) > pupil_size > 2.5:
             idx = samples.index(max(samples))
             samples[idx] = pupil_size
 
@@ -218,31 +232,49 @@ for event in event_dict:
     event_dict[event]["average_size_after"] = size_after
 
 
-excel_data = pd.DataFrame({
-    "Event Label + Start/End": 1,
-    "Avg Pupil Size Before Event": 2,
-    "Avg 3 Min Pupil Sizes After Event": 3
-})
-
-extremes_data = pd.DataFrame({
-    "Type": ["Maximum", "Minimum"],
-    "Timestamp (s)": [max_point[0], min_point[0]],
-    "Pupil Size": [max_point[1], min_point[1]]
-})
-
 results_dir = os.path.join(os.getcwd(), "results")
 os.makedirs(results_dir, exist_ok=True)
 output_path = os.path.join(results_dir, excel_filename)
 
-with pd.ExcelWriter(output_path) as writer:
-    excel_data.to_excel(writer, index=False, sheet_name="Events")
-    extremes_data.to_excel(writer, index=False, sheet_name="Pupil Extremes")
+
+data = []
+for event_name, info in event_dict.items():
+    data.append([
+        info.get('vector'),
+        info.get('luminescence'),
+        info.get('average_size_before'),
+        info.get('average_size_after')
+    ])
+
+wb = Workbook()
+ws = wb.active
+
+headers = ["Vector", "Luminescence", "Avg Before", "Min Avg After"]
+
+# merge headers
+col = 1
+for i, header in enumerate(headers):
+    span = 3 if i == 1 else 2
+    ws.merge_cells(start_row=1, start_column=col, end_row=1, end_column=col + span - 1)
+    ws.cell(row=1, column=col, value=header)
+    col += span
+
+# fill data
+for r, row in enumerate(data, 2):
+    col = 1
+    for i, value in enumerate(row):
+        span = 3 if i == 1 else 2
+        ws.merge_cells(start_row=r, start_column=col, end_row=r, end_column=col + span - 1)
+        ws.cell(row=r, column=col, value=value)
+        col += span
+# Save
+wb.save(output_path)
 
 print(f"Excel file saved to: {output_path}")
 
 # --- Plot ---
 plt.figure(figsize=(16, 6))
-plt.plot(pupil_time, chosen_pupil, label="Chosen Pupil", color='navy')
+pupil_line, = plt.plot(pupil_time, chosen_pupil, label="Chosen Pupil", color='navy')
 
 marker_lines = []
 for i, t in enumerate(marker_times):
@@ -258,6 +290,14 @@ def on_add(sel):
     sel.annotation.set_text(marker_lines[idx][1])
     sel.annotation.get_bbox_patch().set(fc="white", alpha=0.9)
 
+cursor_pupil = mplcursors.cursor(pupil_line, hover=True)
+
+@cursor_pupil.connect("add")
+def on_add_pupil(sel):
+    x, y = sel.target
+    sel.annotation.set_text(f"t={x:.3f}, size={y:.3f}")
+    sel.annotation.get_bbox_patch().set(fc="lightyellow", alpha=0.9)
+
 plt.xlabel("Time (s)")
 plt.ylabel("Pupil Size")
 plt.title("Pupil Size Over Time with Event Markers")
@@ -267,4 +307,5 @@ plt.tight_layout()
 
 plot_path = os.path.join(results_dir, plot_filename)
 plt.savefig(plot_path, dpi=300)
+plt.show()
 plt.close()
