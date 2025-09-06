@@ -11,25 +11,13 @@ The raw experiment output contains:
 - A continuous stream of pupil recordings  
 - A timeline of Unity events  
 
-This tool parses the data and provides:  
+This tool parses the data and outputs:  
 - 📊 **Visualization** – plots pupil reactions alongside Unity events on interactive graphs  
 - 📑 **Excel Export** – generates an Excel file with relevant metrics  
 ---
 
-## Features  
-- Load raw experiment output files  
-- Synchronize pupil recordings with Unity events  
-- Plot interactive graphs for easy data exploration  
-- Export results to Excel for further analysis  
-
-
-## Output  
-Graphs and Excel files are generated to help researchers analyze correlations between experimental events and pupil responses.  
-
----
-
 ## Running  
-1. Clone this repository  
-2. Install requirements: pip install -r requirements.txt
- //TODO: add selection option for the folder
-3. Mind the location of your recording files
+1. [Download Windows executable](https://github.com/TootEgozy/Visualize-VR/releases/download/v1.0/Process.VR.Data.exe)
+2. Save the file in a folder - the script creates another folder fo the output in the same destination.
+3. Double click the file. 
+
