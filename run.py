@@ -18,6 +18,8 @@ plot_filename = f"graph-{timestamp_plot}.png"
 
 # ----------------- Helper functions to restructure and clean data ---------------
 
+digits_fixed = 8 # how many digits to include in the floats
+
 def clean_event_name(event_name):
     s = event_name.lower()
     s = re.sub(r'\b(start|stop)\b', '', s)
@@ -25,18 +27,34 @@ def clean_event_name(event_name):
     s = ' '.join(s.split())
     return s
 
+def get_vector_from_name(event_name):
+    match = re.search(r'\(([^)]+)\)', event_name)
+    if match:
+        return f"({match.group(1).strip()})"
+    return None
+
 
 def build_event_dict(stream):
     events = stream['time_series']
     timestamps = stream['time_stamps']
     event_dict = {}
-    for event, ts in zip(events, timestamps):
+
+    for i in range(len(events)):
+        event = events[i]
+        ts = timestamps[i]
         event_name = clean_event_name(event[0])
+        event_vector = get_vector_from_name(event_name)
+        last_event_ts = timestamps[-1]
+        fixed_digits_ts = round(ts, digits_fixed)
+        fixed_digits_next_event_ts = round(timestamps[i + 1] if i + 1 < len(timestamps) else last_event_ts, digits_fixed)
 
         if event_name not in event_dict:
-            event_dict[event_name] = {"start": ts, "stop": None}
+            event_dict[event_name] = {"start": fixed_digits_ts, "stop": last_event_ts}
+            event_dict[event_name]["vector"] = event_vector
         else:
-            event_dict[event_name]["stop"] = ts
+            event_dict[event_name]["stop"] = fixed_digits_ts
+            event_dict[event_name]["next_event_start"] = fixed_digits_next_event_ts
+
     return event_dict
 
 
@@ -45,7 +63,8 @@ def build_pupil_dict(stream, pupil_stream):
     pupil_dict = {}
 
     for time_stamp, pupil_size in zip(timestamps, pupil_stream):
-        pupil_dict[time_stamp] = pupil_size
+        fixed_time_stamp = round(time_stamp, digits_fixed)
+        pupil_dict[fixed_time_stamp] = pupil_size
 
     return pupil_dict
 
@@ -68,9 +87,57 @@ def select_valid_pupil(pupil_data):
         return pupil
 
 
-def get_pupil_size_by_timestamp(pupil_dict, target_ts):
-    closest_ts = min(pupil_dict.keys(), key=lambda ts: abs(ts - target_ts))
-    return pupil_dict[closest_ts]
+def get_closest_timestamp(timestamps_list, target_ts):
+    idx = min(range(len(timestamps_list)), key=lambda i: abs(timestamps_list[i] - target_ts))
+    return round(timestamps_list[idx], digits_fixed), idx
+
+
+def get_timestamps_before_event(timestamps_list, pupil_map, event_ts, count=3, sampling_gap = 14):
+    samples = []
+    event_exact_ts, event_i = get_closest_timestamp(timestamps_list, event_ts)
+    jump = 0.001 * sampling_gap
+    items_left = count
+    i = 1
+
+    while items_left > 0:
+        jump = jump * i
+        i += 1
+        ts, ts_i = get_closest_timestamp(timestamps_list, event_exact_ts - jump)
+
+        pupil_size = pupil_map.get(ts)
+
+        if pupil_size > 0: # valid sample, not a blink
+            samples.append(pupil_size)
+            items_left -= 1
+        else: # a blink
+            if i > 100:
+                raise ValueError(f"Cannot find valid timestamps before the event which starts at {event_ts}")
+    return samples
+
+def get_average_size_before_event(pupil_dict_keys, pupil_dict, event_start):
+    samples_before_start = get_timestamps_before_event(pupil_dict_keys, pupil_dict, event_start)
+    average_pupil_size_before = sum(samples_before_start) / len(samples_before_start)
+    return average_pupil_size_before
+
+
+def get_average_size_after_event(pupil_dict_keys, pupil_dict, event_start, event_end, count=3):
+    samples = [1000] * count
+    start_ts, start_i = get_closest_timestamp(pupil_dict_keys, event_start)
+    end_ts, end_i = get_closest_timestamp(pupil_dict_keys, event_end)
+
+    if event_start == event_end:
+        return pupil_dict.get(get_closest_timestamp(pupil_dict_keys, event_start))
+
+    searching_range = pupil_dict_keys[start_i: end_i + 1]
+
+    for ts in searching_range:
+        pupil_size = pupil_dict.get(ts)
+        if max(samples) > pupil_size > 0:
+            idx = samples.index(max(samples))
+            samples[idx] = pupil_size
+
+    return sum(samples) / len(samples)
+
 
 # --------------------------------------------------------------------------------
 
@@ -134,13 +201,22 @@ while i < len(marker_labels) - 1:
 
 # --------------------------------- Compute Data for Excel -----------------------------------
 
+# Collect data
 event_dict = build_event_dict(marker_streams[0])
 pupil_dict = build_pupil_dict(pupil_streams[0], chosen_pupil)
 
+pupil_timestamps = list(pupil_dict.keys())
 
-event_key = list(event_dict.keys())[0]
-event_start = event_dict[event_key]["start"]
-pupil_size_at_event = get_pupil_size_by_timestamp(pupil_dict, event_start)
+for event in event_dict:
+    size_before = get_average_size_before_event(pupil_timestamps, pupil_dict, event_dict[event].get("start"))
+    event_dict[event]["average_size_before"] = size_before
+
+    event_end = round(event_dict[event].get("stop", marker_streams[0]["time_stamps"][-1]), digits_fixed)
+    next_start = round(event_dict[event].get("next_event_start", marker_streams[0]["time_stamps"][-1]), digits_fixed)
+
+    size_after = get_average_size_after_event(pupil_timestamps, pupil_dict, event_end, next_start)
+    event_dict[event]["average_size_after"] = size_after
+
 
 excel_data = pd.DataFrame({
     "Event Label + Start/End": 1,
