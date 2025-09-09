@@ -1,6 +1,7 @@
 # VR Pupil Reaction Analyzer  
 
 A Python tool for visualizing pupil reactions to VR/Unity events and exporting experiment data to Excel.  
+Tested only in Windows.
 
 ---
 
@@ -18,6 +19,7 @@ This tool parses the data and outputs:
 
 ## Running  
 1. [Download Windows executable](https://github.com/TootEgozy/Visualize-VR/releases/download/v1.0/Process.VR.Data.exe)
-2. Save the file in a folder - the script creates another folder fo the output in the same destination.
-3. Double click the file. 
+2. Save the script in a folder - the script creates another folder fo the output in the same destination.
+3. Your recording files can be in any folder, the script opens the file explorer.
+4. Double click the script icon to run it. 
 
