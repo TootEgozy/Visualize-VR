@@ -108,26 +108,24 @@ def get_timestamps_before_event(timestamps_list, pupil_map, event_ts, count=3, s
     samples = []
     event_exact_ts, event_i = get_closest_timestamp(timestamps_list, event_ts)
     jump = 0.001 * sampling_gap
-    items_left = count
     i = 1
 
-    while items_left > 0:
+    while len(samples) < count:
         jump = jump * i
         i += 1
-        ts, ts_i = get_closest_timestamp(timestamps_list, event_exact_ts - jump)
+        ts, ts_i = get_closest_timestamp(timestamps_list, event_exact_ts + jump)
 
         pupil_size = pupil_map.get(ts)
 
         if pupil_size > 2.5: # valid sample, not a blink
             samples.append(pupil_size)
-            items_left -= 1
         else: # a blink
             if i > 100:
-                raise ValueError(f"Cannot find valid timestamps before the event which starts at {event_ts}")
+                raise ValueError(f"Cannot find valid timestamps for event which starts at {event_ts}")
     return samples
 
 def get_average_size_before_event(pupil_dict_keys, pupil_dict, event_start):
-    samples_before_start = get_timestamps_before_event(pupil_dict_keys, pupil_dict, event_start)
+    samples_before_start = get_timestamps_before_event(pupil_dict_keys, pupil_dict, event_start, 3, 30)
     average_pupil_size_before = sum(samples_before_start) / len(samples_before_start)
     return average_pupil_size_before
 
@@ -152,7 +150,7 @@ def get_average_size_after_event(pupil_dict_keys, pupil_dict, event_start, event
 
 
 # --------------------------------------------------------------------------------
-
+pupil_timestamp_gap = 14.5 # the approximate time in ms between pupil measurements
 
 # Load XDF
 xdf_path = filedialog.askopenfilename(
@@ -163,6 +161,8 @@ if not xdf_path:
     raise FileNotFoundError("No file was selected.")
 
 streams, header = pyxdf.load_xdf(xdf_path)
+file_name = os.path.basename(xdf_path)
+print(f'Reading file {file_name}')
 
 # Identify relevant streams
 pupil_streams = [s for s in streams if "pupil" in s['info']['name'][0].lower()]
