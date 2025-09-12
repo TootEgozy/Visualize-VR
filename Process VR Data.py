@@ -11,6 +11,7 @@ import os
 from openpyxl import Workbook
 
 digits_fixed = 8 # how many digits to include in the floats
+blink_threshold = 2 # if pupil size is below this number it's considered a blink
 now = datetime.now()
 timestamp_excel = now.strftime("260825-%H%M")
 timestamp_plot = now.strftime("260825-%H%M")
@@ -104,28 +105,23 @@ def get_closest_timestamp(timestamps_list, target_ts):
     return round(timestamps_list[idx], digits_fixed), idx
 
 
-def get_timestamps_before_event(timestamps_list, pupil_map, event_ts, count=3, sampling_gap = 14):
+def get_timestamps_before_event(timestamps_list, pupil_dict, event_ts, end_ms_count, gap_ms):
     samples = []
-    event_exact_ts, event_i = get_closest_timestamp(timestamps_list, event_ts)
-    jump = 0.001 * sampling_gap
-    i = 1
+    gap_s = gap_ms / 1000
+    end_s_count = end_ms_count / 1000
+    sampling_pointer, _ = get_closest_timestamp(timestamps_list, event_ts)
+    sampling_end, _ = get_closest_timestamp(timestamps_list, event_ts + end_s_count)
 
-    while len(samples) < count:
-        jump = jump * i
-        i += 1
-        ts, ts_i = get_closest_timestamp(timestamps_list, event_exact_ts + jump)
-
-        pupil_size = pupil_map.get(ts)
-
-        if pupil_size > 2.5: # valid sample, not a blink
-            samples.append(pupil_size)
-        else: # a blink
-            if i > 100:
-                raise ValueError(f"Cannot find valid timestamps for event which starts at {event_ts}")
+    while sampling_pointer < sampling_end:
+        ts, _ = get_closest_timestamp(timestamps_list, sampling_pointer)
+        pupil_size = pupil_dict[ts]
+        samples.append(pupil_size)
+        sampling_pointer = ts + gap_s
+    
     return samples
 
 def get_average_size_before_event(pupil_dict_keys, pupil_dict, event_start):
-    samples_before_start = get_timestamps_before_event(pupil_dict_keys, pupil_dict, event_start, 3, 30)
+    samples_before_start = get_timestamps_before_event(pupil_dict_keys, pupil_dict, event_start, 90, 14.5)
     average_pupil_size_before = sum(samples_before_start) / len(samples_before_start)
     return average_pupil_size_before
 
@@ -142,12 +138,16 @@ def get_average_size_after_event(pupil_dict_keys, pupil_dict, event_start, event
 
     for ts in searching_range:
         pupil_size = pupil_dict.get(ts)
-        if max(samples) > pupil_size > 2.5:
+        if max(samples) > pupil_size > blink_threshold:
             idx = samples.index(max(samples))
             samples[idx] = pupil_size
 
     return sum(samples) / len(samples)
 
+def calculate_diff(a, b):
+    if a is None or b is None:
+        return None
+    return round(float((b - a) / a * 100), 3)
 
 # --------------------------------------------------------------------------------
 pupil_timestamp_gap = 14.5 # the approximate time in ms between pupil measurements
@@ -218,6 +218,7 @@ event_dict = build_event_dict(marker_streams[0])
 pupil_dict = build_pupil_dict(pupil_streams[0], chosen_pupil)
 
 pupil_timestamps = list(pupil_dict.keys())
+print(f"pupil dict length = {len(pupil_timestamps)}")
 
 for event in event_dict:
     size_before = get_average_size_before_event(pupil_timestamps, pupil_dict, event_dict[event].get("start"))
@@ -228,6 +229,9 @@ for event in event_dict:
 
     size_after = get_average_size_after_event(pupil_timestamps, pupil_dict, event_end, next_start)
     event_dict[event]["average_size_after"] = size_after
+    
+    percentage_difference = calculate_diff(size_before, size_after)
+    event_dict[event]["percentage_difference"] = percentage_difference
 
 # Create excel
 results_dir = os.path.join(os.getcwd(), "VR Processing Results")
@@ -241,13 +245,14 @@ for event_name, info in event_dict.items():
         info.get('vector'),
         info.get('luminescence'),
         info.get('average_size_before'),
-        info.get('average_size_after')
+        info.get('average_size_after'),
+        info.get('percentage_difference'),
     ])
 
 wb = Workbook()
 ws = wb.active
 
-headers = ["Vector", "Luminescence", "Avg Before", "Min Avg After"]
+headers = ["Vector", "Luminescence", "Avg Before", "Min Avg After", "%"]
 
 # merge headers
 col = 1
