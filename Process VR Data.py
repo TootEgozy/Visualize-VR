@@ -9,7 +9,6 @@ import numpy as np
 import mplcursors
 import os
 from openpyxl import Workbook
-from openpyxl.styles import Alignment
 
 digits_fixed = 8 # how many digits to include in the floats
 blink_threshold = 2 # if pupil size is below this number it's considered a blink
@@ -24,9 +23,6 @@ vec_dict = {
     '(0.78, 0.78, 2.00)': 17,
     '(0.15, 0.15, 2.00)': 34,
     '(0.78, -0.78, 2.00)': 65,
-    '(0.15, -0.15, 2.00)': 44,
-    '(-0.78, -0.78, 2.00)': 60,
-    '(-0.15, -0.15, 2.00)': 43,
 }
 
 # ----------------- Helper functions to restructure and clean data ---------------
@@ -63,7 +59,6 @@ def build_event_dict(stream):
         event_name = clean_event_name(event[0])
         event_vector = get_vector_from_name(event_name)
         event_luminescence = get_luminescence_from_name(event_name)
-        event_vf = vector_to_vf(event_vector, vec_dict)
         last_event_ts = timestamps[-1]
         fixed_digits_ts = round(ts, digits_fixed)
         fixed_digits_next_event_ts = round(timestamps[i + 1] if i + 1 < len(timestamps) else last_event_ts, digits_fixed)
@@ -73,9 +68,7 @@ def build_event_dict(stream):
                 "start": fixed_digits_ts,
                 "stop": last_event_ts,
                 "vector": event_vector,
-                "luminescence": event_luminescence,
-                "vf": event_vf,
-                "label": event_name,
+                "luminescence": event_luminescence
             }
         else:
             event_dict[event_name]["stop"] = fixed_digits_ts
@@ -262,8 +255,8 @@ output_path = os.path.join(results_dir, excel_filename)
 data = []
 for event_name, info in event_dict.items():
     data.append([
-        info.get('vf'),
-        info.get('label'),
+        info.get('vector'),
+        info.get('luminescence'),
         info.get('average_size_before'),
         info.get('average_size_after'),
         info.get('percentage_difference'),
@@ -272,12 +265,12 @@ for event_name, info in event_dict.items():
 wb = Workbook()
 ws = wb.active
 
-headers = ["vf", "label", "Avg Before", "Min Avg After", "%"]
+headers = ["Vector", "Luminescence", "Avg Before", "Min Avg After", "%"]
 
 # merge headers
 col = 1
 for i, header in enumerate(headers):
-    span = 4 if i == 1 else 2
+    span = 3 if i == 1 else 2
     ws.merge_cells(start_row=1, start_column=col, end_row=1, end_column=col + span - 1)
     ws.cell(row=1, column=col, value=header)
     col += span
@@ -286,13 +279,10 @@ for i, header in enumerate(headers):
 for r, row in enumerate(data, 2):
     col = 1
     for i, value in enumerate(row):
-        span = 4 if i == 1 else 2
+        span = 3 if i == 1 else 2
         ws.merge_cells(start_row=r, start_column=col, end_row=r, end_column=col + span - 1)
         ws.cell(row=r, column=col, value=value)
-        cell = ws.cell(row=r, column=col, value=value)
-        cell.alignment = Alignment(horizontal="left")
         col += span
-
 # Save
 wb.save(output_path)
 
