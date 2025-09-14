@@ -27,12 +27,6 @@ def plot_data(marker_streams, pupil_streams, chosen_pupil, results_dir_path, sub
         marker_labels = []
         marker_times = []
 
-    # Max/Min pupil points
-    max_idx = np.argmax(chosen_pupil)
-    min_idx = np.argmin(chosen_pupil)
-    max_point = (pupil_time[max_idx], chosen_pupil[max_idx])
-    min_point = (pupil_time[min_idx], chosen_pupil[min_idx])
-
     # --- Build Event Infos (pairing Start/Stop) ---
     event_infos = []
     i = 0

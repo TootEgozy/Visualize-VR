@@ -28,7 +28,7 @@ class ExcelOutput:
         self.pupil_sizes = np.array(pupil_streams[0]['time_series'])
         self.pupil_ts = np.array(pupil_streams[0]['time_stamps'])
         self.chosen_pupil = self.select_valid_pupil()
-        self.pupil_dict = self.build_pupil_dict(pupil_streams[0])
+        self.pupil_dict = self.build_pupil_dict()
         self.pupil_dict_keys = list(self.pupil_dict.keys())
         self.event_dict = self.build_event_dict(marker_streams[0])
         self.subject_id, self.eeg_part = self.parse_filename(filename)
@@ -133,13 +133,20 @@ class ExcelOutput:
 
         return event_dict
 
-    def build_pupil_dict(self, pupil_stream):
+    def build_pupil_dict(self):
         chosen_pupil = self.chosen_pupil
         pupil_dict = {}
 
-        for time_stamp, pupil_size in zip(self.pupil_ts, chosen_pupil):
+        mask = [False] * len(chosen_pupil)
+        for i, val in enumerate(chosen_pupil):
+            if val == -1:
+                for j in range(i - 2, i + 3):
+                    if 0 <= j < len(mask):
+                        mask[j] = True
+
+        for time_stamp, pupil_size, is_blink in zip(self.pupil_ts, chosen_pupil, mask):
             fixed_time_stamp = round(time_stamp, self.DIGITS_FIXED)
-            pupil_dict[fixed_time_stamp] = pupil_size
+            pupil_dict[fixed_time_stamp] = -1 if is_blink else pupil_size
 
         return pupil_dict
 
