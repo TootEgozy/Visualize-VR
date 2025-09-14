@@ -14,6 +14,8 @@ def compile_filename(subject_id, eeg_part):
     return f"Graph-{subject_id}-{eeg_part}-{date_str}-{time_str}"
 
 def plot_data(marker_streams, pupil_streams, chosen_pupil, results_dir_path, subject_id, eeg_part):
+
+    print("Plotting streams")
     pupil_time = np.array(pupil_streams[0]['time_stamps'])
 
     if marker_streams:

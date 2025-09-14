@@ -35,6 +35,7 @@ class ExcelOutput:
 
     def create_excel_file(self, results_dir):
         filename = self.compile_filename()
+        print("Creating excel file: " + filename)
         output_path = os.path.join(results_dir, f"{filename}.xlsx")
 
         data = []
@@ -54,15 +55,6 @@ class ExcelOutput:
 
         headers = ["Subject", "EEG", "Label", "VF", "Avg Before", "Min Avg After", "%"]
         spans = [1, 2, 5, 1, 2, 2, 2]
-        header_fills = [
-            "DCE6F1",  # soft gray-blue
-            "E2EFDA",  # muted green
-            "E9EBF0",  # cool gray
-            "F2EBEB",  # muted red
-            "DEEAD6",  # subdued sage
-            "E6E0EC",  # muted lavender
-            "F8F5E5",  # ivory
-        ]
 
         # fill headers
         col = 1
@@ -71,7 +63,7 @@ class ExcelOutput:
             ws.merge_cells(start_row=1, start_column=col, end_row=1, end_column=col + span - 1)
             ws.cell(row=1, column=col, value=header)
             cell = ws.cell(row=1, column=col, value=header)
-            cell.fill = PatternFill(start_color=header_fills[i], end_color=header_fills[i], fill_type="solid")
+            cell.fill = PatternFill(start_color="E9EBF0", end_color="E9EBF0", fill_type="solid")
             col += span
 
         # fill data
@@ -84,6 +76,13 @@ class ExcelOutput:
                 cell = ws.cell(row=r, column=col, value=value)
                 cell.alignment = Alignment(horizontal="left")
                 col += span
+
+                if i == 6:
+                    try:
+                        if float(value) < -15:
+                            cell.fill = PatternFill(start_color="FFC7CE", end_color="FFC7CE", fill_type="solid")
+                    except (ValueError, TypeError):
+                        pass
 
         wb.save(output_path)
         print(f"Excel file saved to: {output_path}")

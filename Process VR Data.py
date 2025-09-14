@@ -3,9 +3,10 @@ import pyxdf
 import matplotlib
 matplotlib.use('TkAgg')
 import os
-
 from excel_output import ExcelOutput
 from plot_output import plot_data
+
+print("-------------------------- Running Process VR Data --------------------------")
 
 # Load XDF
 xdf_path = filedialog.askopenfilename(
@@ -35,5 +36,6 @@ os.makedirs(results_dir, exist_ok=True)
 excel_output = ExcelOutput(file_name, marker_streams, pupil_streams)
 excel_output.create_excel_file(results_dir)
 
-plot_data(marker_streams, pupil_streams, excel_output.get_chosen_pupil(), results_dir, excel_output.subject_id, excel_output.eeg_part)
+subject_id, eeg_part = excel_output.parse_filename(file_name)
+plot_data(marker_streams, pupil_streams, excel_output.get_chosen_pupil(), results_dir, subject_id, eeg_part)
 
