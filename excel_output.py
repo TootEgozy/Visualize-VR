@@ -215,11 +215,15 @@ class ExcelOutput:
         return sum(samples) / len(samples)
 
     def compile_filename(self):
-        now = datetime.now()
-        date_str = now.strftime("%d%m%Y")
-        time_str = now.strftime("%H%M%S")
-        return f"Analytics-sub{self.subject_id}-{self.eeg_part}-{date_str}-{time_str}"
+        date_time = self.get_date_time()
+        return f"Analytics-sub{self.subject_id}_{self.eeg_part}_{date_time}.xlsx"
 
+    @staticmethod
+    def get_date_time():
+        now = datetime.now()
+        date_str = now.strftime("%Y-%m-%d")
+        time_str = now.strftime("%H-%M-%S")
+        return f"{date_str}_{time_str}"
 
     @staticmethod
     def parse_filename(filename):
