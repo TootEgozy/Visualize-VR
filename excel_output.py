@@ -3,7 +3,9 @@ import numpy as np
 import os
 from datetime import datetime
 from openpyxl import Workbook, load_workbook
-from openpyxl.styles import Alignment, PatternFill
+from openpyxl.styles import Alignment, PatternFill, Border, Side
+from borders import header_border, right_border, bottom_border
+
 
 class ExcelOutput:
 
@@ -23,11 +25,8 @@ class ExcelOutput:
             '(-0.15, -0.15, 2.00)': 43,
         }
 
-    def write_to_excel(self, marker_streams, pupil_streams, results_dir, add_to_existing, output_filename, streams_filename):
+    def write_to_excel(self, marker_streams, pupil_streams, results_dir, output_filename, streams_filename, index):
         existing_path = os.path.join(results_dir, output_filename)
-
-        if add_to_existing and not os.path.exists(existing_path):
-            raise FileNotFoundError(f"Missing output path for dir {results_dir} and file {output_filename}")
 
         print(f"Writing to {existing_path}")
         subject_id, eeg_part = self.parse_filename(streams_filename)
@@ -38,7 +37,7 @@ class ExcelOutput:
         wb = None
         ws = None
 
-        if add_to_existing:
+        if index > 0:
             wb = load_workbook(existing_path)
             ws = wb.active
             start_row = ws.max_row + 1 # first empty row
@@ -60,7 +59,6 @@ class ExcelOutput:
             for i, value in enumerate(row):
                 span = spans[i]
                 ws.merge_cells(start_row=r, start_column=col, end_row=r, end_column=col + span - 1)
-                # ws.cell(row=r, column=col, value=value)
                 cell = ws.cell(row=r, column=col, value=value)
                 cell.alignment = Alignment(horizontal="left")
                 col += span
@@ -71,6 +69,13 @@ class ExcelOutput:
                             cell.fill = PatternFill(start_color="FFC7CE", end_color="FFC7CE", fill_type="solid")
                     except (ValueError, TypeError):
                         pass
+
+        last_row = start_row + len(data) - 1
+        col = 1
+        for span in spans:
+            for c in range(col, col + span):
+                ws.cell(row=last_row, column=c).border = bottom_border
+            col += span
 
         wb.save(existing_path)
         print(f"Excel file saved to: {existing_path}")
@@ -230,7 +235,7 @@ class ExcelOutput:
     @staticmethod
     def get_date_time():
         now = datetime.now()
-        date_str = now.strftime("%Y-%m-%d")
+        date_str = now.strftime("%d-%m-%y")
         time_str = now.strftime("%H-%M-%S")
         return f"{date_str}_{time_str}"
 

@@ -1,36 +1,65 @@
-import easygui
-import os
+import tkinter as tk
+from tkinter import filedialog
 
-def ask_if_adding_to_existing_excel():
-    """
-    Interactive dialog for Excel output configuration.
+def run_gui(default_filename="output.xlsx"):
+    result = {
+        "xdf_paths": [],
+        "output_folder_path": "",
+        "output_filename": default_filename
+    }
 
-    Returns:
-        add_to_existing (bool): True if user chose to add to an existing file.
-        file_path (str | None): Full path if add_to_existing is True, else None.
-        file_name (str | None): Filename if add_to_existing is True, else None.
-    """
-    file_path = None
-    file_name = None
+    def select_files():
+        paths = filedialog.askopenfilenames(
+            title="Select input files",
+            filetypes=[("XDF files", "*.xdf"), ("All files", "*.*")]
+        )
+        if paths:
+            result["xdf_paths"] = list(paths)
+            files_var.set(", ".join(paths))
 
-    while True:
-        # Step 1: Yes/No
-        choice = easygui.ynbox("Do you want to add to an existing file?", "Excel Options", ["Yes", "No"])
+    def select_output_folder():
+        path = filedialog.askdirectory(title="Select output folder")
+        if path:
+            output_folder_var.set(path)
 
-        if not choice:  # User picked "No" or closed
-            return False, None, None
+    def submit():
+        result["output_folder_path"] = output_folder_var.get()
+        result["output_filename"] = outfile_var.get()
+        root.destroy()
 
-        # Step 2: File selection or Go Back
-        buttons = ["Browse File", "Go Back"]
-        choice = easygui.buttonbox("Select an existing Excel file or go back:", "Select File", choices=buttons)
+    root = tk.Tk()
+    root.title("Excel File Setup")
 
-        if choice == "Go Back":
-            continue  # restart at Step 1
+    default_font = ("TkDefaultFont", 12)
+    pad_opts = {"padx": 10, "pady": 5}
 
-        if choice == "Browse File":
-            file_path = easygui.fileopenbox("Select Excel file", filetypes=["*.xlsx"])
-            if file_path and os.path.isfile(file_path):
-                file_name = os.path.basename(file_path)
-                return True, file_path, file_name
-            else:
-                easygui.msgbox("Invalid file path, please try again.")
+    # ---- Input files ----
+    tk.Label(root, text="Input files:", font=default_font).grid(row=0, column=0, sticky="w", **pad_opts)
+    files_var = tk.StringVar()
+    tk.Entry(root, textvariable=files_var, width=60, font=default_font).grid(row=0, column=1, **pad_opts)
+    tk.Button(root, text="Browse", command=select_files, font=default_font).grid(row=0, column=2, **pad_opts)
+
+    # ---- Output folder ----
+    tk.Label(root, text="Output folder:", font=default_font).grid(row=1, column=0, sticky="w", **pad_opts)
+    output_folder_var = tk.StringVar()
+    tk.Entry(root, textvariable=output_folder_var, width=60, font=default_font).grid(row=1, column=1, **pad_opts)
+    tk.Button(root, text="Browse", command=select_output_folder, font=default_font).grid(row=1, column=2, **pad_opts)
+
+    # ---- Output filename ----
+    tk.Label(root, text="Output filename:", font=default_font).grid(row=2, column=0, sticky="w", **pad_opts)
+    outfile_var = tk.StringVar(value=default_filename)
+    tk.Entry(root, textvariable=outfile_var, width=60, font=default_font).grid(row=2, column=1, **pad_opts)
+
+    # ---- Submit ----
+    tk.Button(root, text="OK", command=submit, font=default_font).grid(row=3, column=1, **pad_opts)
+
+    # Center window
+    root.update_idletasks()
+    w = root.winfo_width()
+    h = root.winfo_height()
+    x = (root.winfo_screenwidth() // 2) - (w // 2)
+    y = (root.winfo_screenheight() // 3) - (h // 2)
+    root.geometry(f"+{x}+{y}")
+
+    root.mainloop()
+    return result
